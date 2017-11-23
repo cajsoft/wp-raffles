@@ -1,0 +1,528 @@
+<?php 
+/*
+Plugin Name: CaJSoft Raffle Ticket Plugin - Woocommerce
+Plugin URI: http://www.cajsoft.co.uk/wordpress
+Description: Raffle Ticket Plugin.  Lets users select raffle tickets and add to cart for purchase.  Fully customizable.
+Version: 1.0.0
+Author: CaJSoft WP
+Author URI: http://www.cajsoft.co.uk
+
+*/ 
+	 
+ function cj_raffle_install(){
+	  global $wpdb;  
+	 global $jal_db_version;  
+	 $table_name = $wpdb->prefix . "cj_raffle_tbl"; 
+	 if($wpdb->get_var("show tables like '$table_name'") != $table_name) 
+	{
+		$sql = "CREATE TABLE " . $table_name . " (
+		`id` int(11) NOT NULL,
+		`pre_text` varchar(200) NOT NULL,
+		`post_text` varchar(200) NOT NULL,
+		`total_tickets_req` int(6) DEFAULT NULL,
+		`tickets_sold` int(6) NOT NULL DEFAULT '0',
+		`ticket_price` float NOT NULL DEFAULT '0',
+		`raffle_desc` text,
+		`raffle_img` varchar(255) DEFAULT NULL,
+		`run_date` datetime DEFAULT NULL,
+		`winning_no` varchar(255) DEFAULT NULL,
+		`completed` tinyint(1) NOT NULL DEFAULT '0'
+		);";
+		$wpdb->query($sql);
+		$sql = "ALTER TABLE" . $table_name . "
+		ADD PRIMARY KEY (`id`);
+		MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;COMMIT;
+		";
+		$wpdb->query($sql);
+	}
+	
+	// TO DO - FIX THIS AND ADD NEW PAYMENTS TABLE 
+	
+	
+	$table_name = $wpdb->prefix . "cj_raffle_tickets"; 
+	 if($wpdb->get_var("show tables like '$table_name'") != $table_name) 
+		{
+		$sql = "CREATE TABLE " . $table_name . " (
+		 `order_id` int(11) NOT NULL,
+		  `products_id` int(11) NOT NULL,
+		  `ticket_number` varchar(25) NOT NULL);";
+		$wpdb->query($sql);
+		$sql = "ALTER TABLE" . $table_name . "
+		ADD PRIMARY KEY (`ticketid`,`raffleid`);
+		ALTER TABLE `wp_cj_raffle_tickets`
+		MODIFY `ticketid` int(11) NOT NULL AUTO_INCREMENT;COMMIT;
+		";
+		$wpdb->query($sql);
+		}
+}
+
+
+register_activation_hook(__FILE__,'cj_raffle_install');
+
+function cj_raffle_uninstall(){
+	  global $wpdb;  
+	 global $jal_db_version;  
+	 $table_name = $wpdb->prefix . "cj_raffle_tbl"; 
+		$sql = "DROP TABLE ". $table_name;
+		$wpdb->query($sql);
+	 $table_name = $wpdb->prefix . "cj_raffle_tickets"; 
+		$sql = "DROP TABLE ". $table_name;
+		$wpdb->query($sql);	
+	 }
+register_deactivation_hook( __FILE__, 'cj_raffle_uninstall' );	 
+
+
+function raffle_raffle_script() {
+	// wp_enqueue_script( 'custom-script', plugin_dir_url( __FILE__ ) . 'includes/js/jquery-ui.js' );
+	
+	// wp_enqueue_script( 'custom-script-3', plugin_dir_url( __FILE__ ) . 'includes/js/jcarousellite_1.0.1c4.js' );
+	wp_register_style( 'raffle_raffle_style', plugin_dir_url( __FILE__ ) . 'includes/css/rafflestyles.css', false, '1.0.0' );
+	// wp_register_style( 'raffle_raffle_style_pages', plugin_dir_url( __FILE__ ) . 'includes/css/style.css', false, '1.0.0' );
+	//require plugin_dir_path(__FILE__)  . 'includes/gateways/payments.php';
+	 
+	//wp_register_style( 'prefix-style', plugins_url('mystyle.css', __FILE__) );
+	//wp_enqueue_style( 'prefix-style' ); 
+	
+    wp_enqueue_style( 'raffle_raffle_style' );
+	// wp_enqueue_style( 'raffle_raffle_style_pages' );
+}
+
+
+
+
+add_action( 'wp_enqueue_scripts', 'raffle_raffle_script');
+
+add_action( 'admin_menu', 'add_admin_menu' );
+add_action( 'admin_init', 'settings_init' );
+
+
+function add_admin_menu(  ) { 
+
+	add_menu_page( 'cj_raffle_tickets', 'cj_raffle_tickets', 'manage_options', 'cj_raffle_tickets', 'options_page' );
+
+}
+
+
+function settings_init(  ) { 
+
+	register_setting( 'pluginPage', 'settings' );
+
+	add_settings_section(
+		'pluginPage_section', 
+		__( 'Raffle Tickets Settings', 'wordpress' ), 
+		'settings_section_callback', 
+		'pluginPage'
+	);
+
+	add_settings_field( 
+		'chkPaypal_sandbox', 
+		__( 'use Paypal Sandbox', 'wordpress' ), 
+		'checkbox_field_0_render', 
+		'pluginPage', 
+		'pluginPage_section' 
+	);
+
+	add_settings_field( 
+		'txtPaypal_email', 
+		__( 'Paypal email address', 'wordpress' ), 
+		'text_field_1_render', 
+		'pluginPage', 
+		'pluginPage_section' 
+	);
+
+	add_settings_field( 
+		'chkPaypal_IPN', 
+		__( 'Use Paypal IPN', 'wordpress' ), 
+		'checkbox_field_2_render', 
+		'pluginPage', 
+		'pluginPage_section' 
+	);
+
+	add_settings_field( 
+		'txtNotify_URL', 
+		__( 'Paypal IPN URL', 'wordpress' ), 
+		'text_field_3_render', 
+		'pluginPage', 
+		'pluginPage_section' 
+	);
+
+	add_settings_field( 
+		'txtReturn_URL', 
+		__( 'Paypal Success Return URL', 'wordpress' ), 
+		'text_field_4_render', 
+		'pluginPage', 
+		'pluginPage_section' 
+	);
+
+	add_settings_field( 
+		'txtCancel_URL', 
+		__( 'Paypal Cancel URL', 'wordpress' ), 
+		'text_field_5_render', 
+		'pluginPage', 
+		'pluginPage_section' 
+	);
+
+}
+
+
+function checkbox_field_0_render(  ) { 
+
+	$options = get_option( 'settings' );
+	?>
+	<input type='checkbox' name='settings[checkbox_field_0]' <?php checked( $options['checkbox_field_0'], 1 ); ?> value='1'>
+	<?php
+
+}
+
+
+function text_field_1_render(  ) { 
+
+	$options = get_option( 'settings' );
+	?>
+	<input type='text' name='settings[text_field_1]' value='<?php echo $options['text_field_1']; ?>'> <b>(Business account required for IPN)</b>
+	<?php
+
+}
+
+
+function checkbox_field_2_render(  ) { 
+
+	$options = get_option( 'settings' );
+	?>
+	<input type='checkbox' name='settings[checkbox_field_2]' <?php checked( $options['checkbox_field_2'], 1 ); ?> value='1'>
+	<?php
+
+}
+
+function text_field_3_render(  ) { 
+
+	$options = get_option( 'settings' );
+	?>
+	<input type='text' name='settings[text_field_3]' value='<?php echo plugin_dir_url( __FILE__ ) . "includes/gateways/ipn.php"; ?>'>
+	<?php
+
+}
+
+function text_field_4_render(  ) { 
+
+	$options = get_option( 'settings' );
+	?>
+	<input type='text' name='settings[text_field_4]' value='<?php echo $options['text_field_4']; ?>'>
+	<?php
+
+}
+
+function text_field_5_render(  ) { 
+
+	$options = get_option( 'settings' );
+	?>
+	<input type='text' name='settings[text_field_5]' value='<?php echo $options['text_field_5']; ?>'>
+	<?php
+
+}
+
+
+function settings_section_callback(  ) { 
+
+	echo __( 'Complete the following options for use with Paypal', 'wordpress' );
+
+}
+
+
+function options_page(  ) { 
+
+	?>
+	<form action='options.php' method='post'>
+		<?php
+		settings_fields( 'pluginPage' );
+		do_settings_sections( 'pluginPage' );
+		submit_button();
+		?>
+
+	</form>
+	<?php
+
+}
+
+
+/*add_action('admin_menu', 'wooraffle_menu');
+
+function wooraffle_menu()
+	{
+add_menu_page(__('Add Raffle Ticket Generator Configuration','woocommerce-raffle'), __('Raffle Tickets','woocommerce-raffle'), 'manage_options', 'woocommerce-raffle' ,'woocommerce_raffle_categories');
+		add_submenu_page('woocommerce-raffle', __('Customer\'s Ticket Numbers','woocommerce-raffle'), __('View Customer\'s Ticket Numbers','woocommerce-raffle'), 'manage_options', 'woocommerce-raffle-tickets', 'showresults');
+		
+		add_submenu_page('woocommerce-raffle', __('Raffle Annouce Winner','woocommerce-raffle'), __('Raffle Announce Winner', 'woocommerce-raffle'), 'manage_options', 'winner_categories', 'winner_categories');
+		
+		add_submenu_page('woocommerce-raffle', __('Raffle Winners','woocommerce-raffle'), __('Raffle Winners', 'woocommerce-raffle'), 'manage_options', 'raffle_winners', 'raffle_winners');
+		
+		add_submenu_page('woocommerce-raffle', __('Raffle Tools','woocommerce-raffle'), __('Raffle Tools', 'woocommerce-raffle'), 'manage_options', 'raffle_tools', 'raffle_tools');
+	}
+	
+	function winner_categories(){
+		echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/wordpress-raffle-logo.png" style="float:left"><div style="clear:both"></div>';
+		echo '<h1 style="font-size:20px">For Silver and Gold Members Only</h1>';
+		echo '<p>for information on the silver and gold versions please visit <a href="http://wpraffle.com/">WPraffle.com</a></p>';
+		echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/pick-a-winner.jpg" style="float:left"><div style="clear:both"></div>';
+		}
+		
+		function raffle_winners(){
+			echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/wordpress-raffle-logo.png" style="float:left"><div style="clear:both"></div>';
+		echo '<h1 style="font-size:20px">For Silver and Gold Members Only</h1>';
+		echo '<p>for information on the silver and gold versions please visit <a href="http://wpraffle.com/">WPraffle.com</a></p>';
+		echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/winners.jpg" style="float:left"><div style="clear:both"></div>';
+		}
+		
+		function raffle_tools(){
+			echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/wordpress-raffle-logo.png" style="float:left"><div style="clear:both"></div>';
+			echo '<h1 style="font-size:20px">For Silver and Gold Members Only</h1>';
+			echo '<p>for information on the silver and gold versions please visit <a href="http://wpraffle.com/">WPraffle.com</a></p>';
+		echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/tools.jpg" style="float:left"><div style="clear:both"></div>';
+		}
+
+function woocommerce_raffle_categories(){
+echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/wordpress-raffle-logo.png" style="float:left"><div style="clear:both"></div>';
+ echo '
+ <h1 style="font-size:20px">For Silver and Gold Members Only</h1>
+ <p>for information on the silver and gold versions please visit <a href="http://wpraffle.com/">WPraffle.com</a></p>';
+
+ echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/categories.jpg" style="float:left"><div style="clear:both"></div>';
+ 
+	}
+		
+		
+function showresults(){
+	echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/wordpress-raffle-logo.png" style="float:left"><div style="clear:both"></div>';
+		echo '<h1 style="font-size:20px">For Silver and Gold Members Only</h1>
+		
+		<p>for information on the gold and silver versions please visit <a href="http://wpraffle.com/">WPraffle.com</a></p>';
+		
+		echo '<img src="'.plugin_dir_url( __FILE__ ).'/images/customers-numbers.jpg" style="float:left"><div style="clear:both"></div>';
+		
+	}
+
+*/
+add_shortcode('raffle-tickets', 'my_shortcode_function');
+	
+function my_shortcode_function( $atts ) { 
+
+	global $wpdb;  
+	//global $options;
+	global $ticket_price;
+
+	$atts = shortcode_atts( array(
+        'raffleno' => 1,
+	), $atts, 'raffle-tickets' );
+	
+	$options = get_option( 'settings' );
+	$table_name = $wpdb->prefix . "cj_raffle_tbl"; 
+	 
+	//print_r($atts['raffleno']) ;
+	
+	$retrieve_data = $wpdb->get_results( "select main.id, main.total_tickets_req, main.raffle_desc, main.raffle_img, main.post_text, main.pre_text,main.ticket_price, main.total_tickets_req from wp_cj_raffle_tbl main where main.id = " .$atts['raffleno']);	
+	if ($retrieve_data) {
+	?>
+	<ul>
+	<?php foreach ($retrieve_data as $retrieved_data){
+			$raffleid =  $retrieved_data->id;?>
+			<p><img src='<?php echo $retrieved_data->raffle_img;?>' width='50%' height='50%'/></p>
+			<p><?php echo $retrieved_data->raffle_desc;?></p>
+	<?php 
+			$total_tickets_req = $retrieved_data->total_tickets_req;
+			$pre_text = $retrieved_data->pre_text;
+			$post_text = $retrieved_data->post_text;
+			$ticket_price = $retrieved_data->ticket_price;
+		  }
+	}
+	?>
+	</ul>
+	<div class="rafflerow">
+	<?php
+	$retrieved_data = $wpdb->get_results( "select tickets.ticketid, tickets.email from wp_cj_raffle_tickets tickets where raffleid=" .$atts['raffleno'] );	
+	//if ($retrieve_data) {
+		for ($i = 1; $i <= $total_tickets_req; $i++) {
+			$found = False;
+			for ($ii = 0; $ii <= sizeof($retrieved_data)-1;$ii++) {
+				if ($i == $retrieved_data[$ii]->ticketid) {
+					echo "<div class='raffleticket-sold' id='$i' >" . $pre_text . "-" . $i . "-" . $post_text . "</div>";
+					$found = True;
+					break;
+				}
+			}
+			if ($found == False) {
+				echo "<div class='raffleticket' id='$i'>" . $pre_text . "-" . $i . "-" . $post_text . "</div>";
+			}
+		}
+	
+
+	?>
+	</div>
+		</br>Ticket Price = £<span class="ticketprice"><?php echo $ticket_price;?></span>
+		</br>Total Tickets Selected = <span class="totaltickets">0</span>
+		</br>Total Cost = £ <span class="totalprice">0</span>
+	</br>
+	
+	<form class="paypal" action="https://www.sandbox.paypal.com/cgi-bin/webscr" method="post" id="paypal_form" target="_self">
+		<input type="hidden" name="business" value="<?php echo $options['text_field_1'];?>">
+		<input type="hidden" name="cmd" value="_cart">
+		 <input type="hidden" name="upload" value="1">
+        <input type="hidden" name="lc" value="UK" />
+		<input type="hidden" name="currency_code" value="GBP" />
+		<input type="hidden" name="custom" value='<?php echo $raffleid;?>' />
+		<input type="hidden" name="bn" value="PP-BuyNowBF:btn_buynow_LG.gif:NonHostedGuest" />
+		<input type='hidden' name='notify_url' value='<?php echo $options['text_field_3'];?>'>
+		<!-- <input type="hidden" name="no_shipping" value="1"> -->
+		<input type='hidden' name='cancel_return' value='<?php echo $options['text_field_5'];?>'>
+        <input type='hidden' name='return' value='<?php echo $options['text_field_4'];?>'>
+		<input type="submit" name="submit" value="Submit Payment"/>
+	</form>
+<script type="text/javascript">//<![CDATA[ 
+var $=jQuery.noConflict();
+$(document).ready(function() {  
+	var counter = 0;
+	$(".raffleticket").on("click", function() {
+		$(this).toggleClass("green");
+		$(this).toggleClass('selected');
+		var selectedIds = $('.selected').map(function() {
+			return this.id;
+		}).get();
+		var id = $(this).attr('id');  
+		if(!$(this).hasClass('selected')) {
+			$('#paypal_form #input_' + id).remove();
+			counter--;
+			var ii = 1;
+			$("input[name^='item_name']").each(function(i){
+				$(this).attr('name', 'item_name_' + ii++);
+			});
+			var ii = 1;
+			$("input[name^='amount']").each(function(i){
+				$(this).attr('name','amount_' + ii++);
+			});
+			var ii = 1;
+			$("input[name^='item_number']").each(function(i){
+				$(this).attr('name','item_number_' + ii++);
+			});
+		} else {
+			counter++;
+			$('#paypal_form').append('<input type="hidden" name="item_name_'+counter+'" value="<?php echo $pre_text;?>-' + id + '-<?php echo $post_text?>" id="input_'+id+'">');
+			$('#paypal_form').append('<input type="hidden" name="amount_'+counter+'" value="' + $(".ticketprice").text() +'" id="input_'+id +'">');
+			$('#paypal_form').append('<input type="hidden" name="item_number_'+counter+'" value="' + id +'" id="input_'+id +'">');
+		}	
+		$(".totaltickets").text(selectedIds.length -1);
+		$(".totalprice").text((selectedIds.length - 1)*$(".ticketprice").text()); 
+		//$('[name=amount]').val((selectedIds.length - 1)*$(".ticketprice").text());
+		//$('[name=item_name]').val((selectedIds.length - 1) + " Raffle Ticket(s)");
+		//alert(selectedIds);
+		//alert('<?php echo $pre_text; ?>');
+		
+});});//]]>  
+
+
+</script>
+	<?php
+	//}
+} 
+
+
+/*
+`id` int(11) NOT NULL,
+		`pre_text` varchar(200) NOT NULL,
+		`post_text` varchar(200) NOT NULL,
+		`total_tickets_req` int(6) DEFAULT NULL,
+		`tickets_sold` int(6) NOT NULL DEFAULT '0',
+		`ticket_price` float NOT NULL DEFAULT '0',
+		`raffle_desc` text,
+		`raffle_img` varchar(255) DEFAULT NULL,
+		`run_date` datetime DEFAULT NULL,
+		`winning_no` varchar(255) DEFAULT NULL,
+		`completed` tinyint(1) NOT NULL DEFAULT '0'
+		*/
+
+/*
+	add_action( 'woocommerce_product_options_general_product_data', 'woo_add_custom_general_fields' );
+function woo_add_custom_general_fields() {
+  global $woocommerce, $post;
+  echo '<div class="options_group">';
+  woocommerce_wp_text_input( 
+	array( 
+		'id'                => '_number_field', 
+		'label'             => __( 'Number Of Raffle Tickets', 'woocommerce' ), 
+		'placeholder'       => '', 
+		'description'       => __( 'Enter the Number of Tickets here for this product.', 'woocommerce' ),
+		'type'              => 'number', 
+		'custom_attributes' => array(
+				'step' 	=> 'any',
+				'min'	=> '0'
+			) 
+	)
+);
+  echo '</div>';
+}
+add_action( 'woocommerce_process_product_meta', 'woo_add_custom_general_fields_save' );
+function woo_add_custom_general_fields_save( $post_id ){
+	$woocommerce_number_field = $_POST['_number_field'];
+	if( !empty( $woocommerce_number_field ) )
+		update_post_meta( $post_id, '_number_field', esc_attr( $woocommerce_number_field ) );
+		}
+add_action('woocommerce_after_single_product_summary', 'number_of_tickets_for_product');
+function number_of_tickets_for_product() {
+	global $post;
+echo '<div style="clear:both;">Number Of Tickets: '.get_post_meta( $post->ID, '_number_field', true ). '</div>';	
+}
+
+
+
+
+function insert_raffle_tickets($order_id){
+	global $wpdb;  
+	 global $jal_db_version;  
+	 $order = new WC_Order($order_id);
+	$items = $order->get_items();
+	$ticket_prefix = date('Y');
+	$last_order_id = $order_id - 1;
+	$start_query = $wpdb->get_results('SELECT * from '.$wpdb->prefix . 'wooraffle_tickets_customer_to_tickets where order_id = "'.$last_order_id.'" order by ticket_number ASC');
+if (empty($start_query)) {
+$start = 100;
+}
+else {
+
+	foreach ( $start_query as $start_query_result ) {
+	$startt = explode('-',$start_query_result->ticket_number);
+	if ($startt[1] == 200) {
+	$start = 100;
+			}
+			else {
+	$start = $startt[1]+1;
+			}
+	}
+
+	foreach ( $items as $item ) {
+    $product_id = $item['product_id'];
+	$no_of_tickets = ($item['qty']) * (get_post_meta( $item['product_id'], '_number_field', true ));
+	for ($i=0; $i<$no_of_tickets; $i++) {
+		
+		$wpdb->insert($wpdb->prefix."wooraffle_tickets_customer_to_tickets", array(
+   "order_id" => $order_id,
+   "products_id" => $item['product_id'],
+   "ticket_number" => $ticket_prefix.'-'.sprintf('%02d',$start)
+));
+	$start++;
+	}
+				}
+			}
+}
+add_action( 'woocommerce_order_status_processing', 'insert_raffle_tickets' );
+function send_ticket_numbers($order) {
+	global $wpdb;
+	$ticket_numbers = $wpdb->get_results('select * from '.$wpdb->prefix.'wooraffle_tickets_customer_to_tickets where order_id = "'.$order->id.'"');
+	if ($wpdb->num_rows > 0) {
+		echo '<h2>Ticket Numbers</h2>';
+		foreach ( $ticket_numbers as $result ) {
+			echo '<p>'.$result->ticket_number.'</p>';
+		}
+	}
+}
+
+*/
+
+?>

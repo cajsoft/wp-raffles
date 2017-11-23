@@ -1,0 +1,63 @@
+.raffleticket {
+	font-family: "Verdana";
+	display:inline-block;
+	font-size: 10px;
+	
+	background-color: #CCC;
+	color: white;
+	margin:5px;
+	text-shadow: 0px 1px 1px #999;
+	box-sizing: border-box;
+	border-radius: 16px;
+	transition: background .5s;
+	-webkit-transition: background .5s;
+	text-align: center;
+	cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select:none;
+    -khtml-user-select:none;
+}
+
+.rafflerow {
+	overflow: hidden; /* simple clearfix */
+}
+.rafflerow .raffleticket {
+	float: left;
+	width: 20%;
+	box-sizing: border-box;
+	padding: 8px;
+}
+
+.rafflerow .raffleticket-sold {
+    float: left;
+	width: 20%;
+	box-sizing: border-box;
+	padding: 8px;
+}
+
+
+.raffleticket.green { background-color: #00cc00; }
+
+.raffleticket:hover {
+	background: palegreen;
+}
+
+.raffleticket-sold {
+	font-family: "Verdana";
+	display:inline-block;
+	font-size: 10px;
+	
+	background-color: #CCC;
+	color: grey;
+	margin:5px;
+	text-shadow: 0px 1px 1px #999;
+	box-sizing: border-box;
+	border-radius: 16px;
+	transition: background .5s;
+	-webkit-transition: background .5s;
+	text-align: center;
+	cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select:none;
+    -khtml-user-select:none;
+}
