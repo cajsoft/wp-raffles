@@ -15,65 +15,47 @@ Author URI: http://www.cajsoft.co.uk
 
 //add_action('admin_init','process_bulk_action');
 
-global $cltd_example_db_version;
-$cltd_example_db_version = '1.1'; // version changed from 1.0 to 1.1
+if (!defined('RAFFLE_TICKET_PLUGIN_VERSION'))
+    define('RAFFLE_TICKET_PLUGIN_VERSION', '1.0.0');
+
+define('WP_CART_LIVE_PAYPAL_URL', 'https://www.paypal.com/cgi-bin/webscr');
+define('WP_CART_SANDBOX_PAYPAL_URL', 'https://www.sandbox.paypal.com/cgi-bin/webscr');
+
 /**
  * register_activation_hook implementation
  *
  * will be called when user activates plugin first time
  * must create needed database tables
  */
-function cltd_example_install()
-{
-    global $wpdb;
-    global $cltd_example_db_version;
-    // we do not execute sql directly
-    // we are calling dbDelta which cant migrate database
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    // save current database version for later use (on upgrade)
-    add_option('cltd_example_db_version', $cltd_example_db_version);
-    /**
-     * [OPTIONAL] Example of updating to 1.1 version
-     *
-     * If you develop new version of plugin
-     * just increment $cltd_example_db_version variable
-     * and add following block of code
-     *
-     * must be repeated for each new version
-     * in version 1.1 we change email field
-     * to contain 200 chars rather 100 in version 1.0
-     * and again we are not executing sql
-     * we are using dbDelta to migrate table changes
-     */
-    
-}
-register_activation_hook(__FILE__, 'cltd_example_install');
-/**
- * register_activation_hook implementation
- *
- * [OPTIONAL]
- * additional implementation of register_activation_hook
- * to insert some dummy data
- */
-function cltd_example_install_data()
-{
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'cte'; // do not forget about tables prefix
-    
-}
-register_activation_hook(__FILE__, 'cltd_example_install_data');
 
+function activate_cj_raffle() {
+   $role = get_role( 'editor' );
+   $role->add_cap( 'manage_options' ); // capability
+//   $role = get_role ('administrator');
+//   $role->add_cap( 'manage_options' );
+}
+// Register our activation hook
+register_activation_hook( __FILE__, 'activate_cj_raffle' );
 
+function deactivate_cj_raffle() {
+  $role = get_role( 'editor' );
+  $role->remove_cap( 'manage_options' ); // capability
+}
+
+// Register our de-activation hook
+register_deactivation_hook( __FILE__, 'deactivate_cj_raffle' );
 
 	 
  function cj_raffle_install(){
 	  global $wpdb;  
 	 global $jal_db_version;  
+	 update_option('raffle_ticket_plugin_version', RAFFLE_TICKET_PLUGIN_VERSION);
+
 	 $table_name = $wpdb->prefix . "cj_raffle_tbl"; 
 	 if($wpdb->get_var("show tables like '$table_name'") != $table_name) 
 	{
-		$sql = "CREATE TABLE " . $table_name . " (
-		`id` int(11) NOT NULL,
+		$sql = "CREATE TABLE IF NOT EXISTS ". $table_name . " (
+		`id` int(11) NOT NULL AUTO_INCREMENT,
 		`pre_text` varchar(200) NOT NULL,
 		`post_text` varchar(200) NOT NULL,
 		`total_tickets_req` int(6) DEFAULT NULL,
@@ -81,44 +63,61 @@ register_activation_hook(__FILE__, 'cltd_example_install_data');
 		`ticket_price` float NOT NULL DEFAULT '0',
 		`raffle_desc` text,
 		`raffle_img` varchar(255) DEFAULT NULL,
-		`run_date` datetime DEFAULT NULL,
-		`winning_no` varchar(255) DEFAULT NULL,
-		`completed` tinyint(1) NOT NULL DEFAULT '0'
-		);";
+		`run_date` date DEFAULT NULL,
+		`winning_no` int(6) DEFAULT NULL,
+		`completed` tinyint(1) NOT NULL DEFAULT '0',
+		PRIMARY KEY (`id`)
+		) ENGINE=InnoDB DEFAULT CHARSET=latin1;";
 		$wpdb->query($sql);
-		$sql = "ALTER TABLE" . $table_name . "
-		ADD PRIMARY KEY (`id`);
-		MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;COMMIT;
-		";
+		
+		$sql = "ALTER TABLE ". $table_name ." AUTO_INCREMENT=1;";
 		$wpdb->query($sql);
 	}
 	
-	// TO DO - FIX THIS AND ADD NEW PAYMENTS TABLE 
-	
-	
-	
-	
-	
-	// TO DO - FIX THIS AS IT DOESNT CREATE RIGHT TABLE !!
+	$table_name = $wpdb->prefix . "cj_raffle_payments"; 
+	if($wpdb->get_var("show tables like '$table_name'") != $table_name) 
+	{
+		$sql = "CREATE TABLE IF NOT EXISTS ". $table_name ." (
+			`payment_id` int(11) NOT NULL AUTO_INCREMENT,
+			`txn_id` varchar(255) COLLATE utf8_unicode_ci NOT NULL,
+			`payment_gross` float(10,2) NOT NULL,
+			`currency_code` varchar(5) COLLATE utf8_unicode_ci NOT NULL,
+			`payment_status` varchar(255) COLLATE utf8_unicode_ci NOT NULL,
+			`payer_email` varchar(100) COLLATE utf8_unicode_ci NOT NULL,
+			PRIMARY KEY (`payment_id`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;";
+		$wpdb->query($sql);
+	}
 	
 	$table_name = $wpdb->prefix . "cj_raffle_tickets"; 
 	 if($wpdb->get_var("show tables like '$table_name'") != $table_name) 
-		{
-		$sql = "CREATE TABLE " . $table_name . " (
-		 `order_id` int(11) NOT NULL,
-		  `products_id` int(11) NOT NULL,
-		  `ticket_number` varchar(25) NOT NULL);";
+	{
+		$sql = "CREATE TABLE IF NOT EXISTS " . $table_name ." (
+			`ticketid` int(11) NOT NULL,
+			`raffleid` int(11) NOT NULL,
+			`txnid` varchar(50) NOT NULL,
+			`ticket` varchar(100) NOT NULL,
+			`name` varchar(60),
+			`address` varchar(200),
+			`email` varchar(25) NOT NULL,
+			`purchase_date` date NOT NULL,
+			UNIQUE KEY `raffle_ticket` (`ticketid`,`raffleid`)
+			) ENGINE=InnoDB DEFAULT CHARSET=latin1;";
 		$wpdb->query($sql);
-		$sql = "ALTER TABLE" . $table_name . "
-		ADD PRIMARY KEY (`ticketid`,`raffleid`);
-		ALTER TABLE `wp_cj_raffle_tickets`
-		MODIFY `ticketid` int(11) NOT NULL AUTO_INCREMENT;COMMIT;
-		";
-		$wpdb->query($sql);
-		}
+	}
+		
 }
 
 register_activation_hook(__FILE__,'cj_raffle_install');
+
+
+function raffle_ticket_plugin_check_version() {
+	if (RAFFLE_TICKET_PLUGIN_VERSION !== get_option('raffle_ticket_plugin_version'))
+		cj_raffle_install();
+}
+
+add_action('plugins_loaded', 'raffle_ticket_plugin_check_version');
+
 
 
 function cj_raffle_uninstall(){
@@ -130,157 +129,149 @@ function cj_raffle_uninstall(){
 	 $table_name = $wpdb->prefix . "cj_raffle_tickets"; 
 		$sql = "DROP TABLE ". $table_name;
 		$wpdb->query($sql);	
-	 }
-register_deactivation_hook( __FILE__, 'cj_raffle_uninstall' );	 
+	 $table_name = $wpdb->prefix . "cj_raffle_payments"; 
+		$sql = "DROP TABLE ". $table_name;
+		$wpdb->query($sql);
+}
+//register_deactivation_hook( __FILE__, 'cj_raffle_uninstall' );	 
+register_uninstall_hook(__FILE__, 'cj_raffle_uninstall');
 
 
 function raffle_raffle_script() {
+	 
 	// wp_enqueue_script( 'custom-script', plugin_dir_url( __FILE__ ) . 'includes/js/jquery-ui.js' );
 	
 	// wp_enqueue_script( 'custom-script-3', plugin_dir_url( __FILE__ ) . 'includes/js/jcarousellite_1.0.1c4.js' );
-	wp_register_style( 'raffle_raffle_style', plugin_dir_url( __FILE__ ) . 'includes/css/rafflestyles.css', false, '1.0.0' );
+		wp_register_style( 'raffle_raffle_style', plugin_dir_url( __FILE__ ) . 'includes/css/rafflestyles.css', false, '1.0.0' );
 	// wp_register_style( 'raffle_raffle_style_pages', plugin_dir_url( __FILE__ ) . 'includes/css/style.css', false, '1.0.0' );
 	//require plugin_dir_path(__FILE__)  . 'includes/gateways/payments.php';
-	 
+
+    //	add_action( 'wp_enqueue_scripts', 'register_my_script' );
+//	wp_register_script( 'raffle-selector', plugin_dir_url(__FILE__). 'includes/js/raffle-selector.js' , false, '1.0.0' );
+		wp_register_script ( 'raffle-selector', plugins_url ( 'includes/js/raffle-selector.js', __FILE__ ) );
+	//wp_register_script( 'raffle-selector', plugin_dir_url( 'includes/js/raffle-selector.js' , __FILE__ ), array(), '1.0.0', true );
 	//wp_register_style( 'prefix-style', plugins_url('mystyle.css', __FILE__) );
 	//wp_enqueue_style( 'prefix-style' ); 
 	
-    wp_enqueue_style( 'raffle_raffle_style' );
+		wp_enqueue_style( 'raffle_raffle_style' );
 	// wp_enqueue_style( 'raffle_raffle_style_pages' );
 }
 
 
 add_action( 'wp_enqueue_scripts', 'raffle_raffle_script');
 
-
 add_shortcode('raffle-tickets', 'my_shortcode_function');
+
+
 	
 function my_shortcode_function( $atts ) { 
 
-	global $wpdb;  
-	//global $options;
-	global $ticket_price;
-
-	$atts = shortcode_atts( array(
-        'raffleno' => 1,
-	), $atts, 'raffle-tickets' );
+		global $wpdb;  
+		//global $options;
+		global $ticket_price;
 	
-	$options = get_option( 'settings' );
-	$table_name = $wpdb->prefix . "cj_raffle_tbl"; 
+	
+		$atts = shortcode_atts( array(
+        'raffleno' => 1,
+		), $atts, 'raffle-tickets' );
+	
+		$options = get_option( 'settings' );
+		$table_name = $wpdb->prefix . "cj_raffle_tbl"; 
 	 
 	//print_r($atts['raffleno']) ;
+		$today = date("Y-m-d", strtotime("now"));
+		//2017-12-03
+		$retrieve_data = $wpdb->get_results ("Select run_date from " . $table_name ." where id = " .$atts['raffleno'] ." and (run_date > '".$today . "' or run_date is null) and completed=0");
+		//error_log(var_dump($wpdb));
+		if (!$retrieve_data) {
+			//error_log(var_dump($wpdb));
+			$output = "<h4>Sorry, this raffle has either passed its end date or has completed...</h4>";
+			return $output;
+		}
+		$output .= "<div class='raffle'>";
+		$retrieve_data = $wpdb->get_results( "select main.id, main.total_tickets_req, main.raffle_desc, main.raffle_img, main.post_text, main.pre_text,main.ticket_price, main.total_tickets_req from " . $table_name ." main where main.id = " .$atts['raffleno']);	
+		if ($retrieve_data) {
 	
+			$output .= "<ul>";
 	
-	$retrieve_data = $wpdb->get_results( "select main.id, main.total_tickets_req, main.raffle_desc, main.raffle_img, main.post_text, main.pre_text,main.ticket_price, main.total_tickets_req from wp_cj_raffle_tbl main where main.id = " .$atts['raffleno']);	
-	if ($retrieve_data) {
-	?>
-	<ul>
-	<?php foreach ($retrieve_data as $retrieved_data){
-			$raffleid =  $retrieved_data->id;?>
-			<p><img src='<?php echo $retrieved_data->raffle_img;?>' width='50%' height='50%'/></p>
-			<p><?php echo $retrieved_data->raffle_desc;?></p>
-	<?php 
-			$total_tickets_req = $retrieved_data->total_tickets_req;
-			$pre_text = $retrieved_data->pre_text;
-			$post_text = $retrieved_data->post_text;
-			$ticket_price = $retrieved_data->ticket_price;
-		  }
-	}
-	?>
-	</ul>
-	<div class="rafflerow">
-	<?php
-	$retrieved_data = $wpdb->get_results( "select tickets.ticketid, tickets.email from wp_cj_raffle_tickets tickets where raffleid=" .$atts['raffleno'] );	
-	//if ($retrieve_data) {
+			foreach ($retrieve_data as $retrieved_data){
+				$raffleid =  $retrieved_data->id;
+				$output .= "<p><img class='raffleimage' src='" . $retrieved_data->raffle_img . "' width='50%' height='50%'/></p>";
+				$output .= "<p><span class='raffledesc'>" . $retrieved_data->raffle_desc ."</span></p>";
+	
+				$total_tickets_req = $retrieved_data->total_tickets_req;
+				$pre_text = $retrieved_data->pre_text;
+				$post_text = $retrieved_data->post_text;
+				$ticket_price = $retrieved_data->ticket_price;
+			}
+		}
+		$output .= "</ul><div class='rafflerow'>";
+		$table_name = $wpdb->prefix . "cj_raffle_tickets"; 
+	
+		$retrieved_data = $wpdb->get_results( "select tickets.ticketid, tickets.email from " . $table_name . " tickets where raffleid=" .$atts['raffleno'] );	
+		//if ($retrieve_data) {
 		for ($i = 1; $i <= $total_tickets_req; $i++) {
 			$found = False;
 			for ($ii = 0; $ii <= sizeof($retrieved_data)-1;$ii++) {
 				if ($i == $retrieved_data[$ii]->ticketid) {
-					echo "<div class='raffleticket-sold' id='$i' >" . $pre_text . "-" . $i . "-" . $post_text . "</div>";
+					$output .= "<div class='raffleticket-sold' id='$i' >" . $pre_text . "-" . $i . "-" . $post_text . "</div>";
 					$found = True;
 					break;
 				}
 			}
 			if ($found == False) {
-				echo "<div class='raffleticket' id='$i'>" . $pre_text . "-" . $i . "-" . $post_text . "</div>";
+				$output .= "<div class='raffleticket' id='$i'>" . $pre_text . "-" . $i . "-" . $post_text . "</div>";
 			}
 		}
 	
+		$paypal_checkout_url = WP_CART_LIVE_PAYPAL_URL;
+		if ($options[checkbox_field_0]) {
+			$paypal_checkout_url = WP_CART_SANDBOX_PAYPAL_URL;
+		}
+	
 
-	?>
-	</div>
-		</br>Ticket Price = £<span class="ticketprice"><?php echo $ticket_price;?></span>
-		</br>Total Tickets Selected = <span class="totaltickets">0</span>
-		</br>Total Cost = £ <span class="totalprice">0</span>
-	</br>
-	</br>
-	<form class="paypal" action="https://www.sandbox.paypal.com/cgi-bin/webscr" method="post" id="paypal_form" target="_self">
-		<input type="hidden" name="business" value="<?php echo $options['text_field_1'];?>">
+		$output .= <<<EOT
+		</div><div class="raffletextblock">
+			</br>Ticket Price = £<span class="ticketprice">$ticket_price</span>
+			</br>Total Tickets Selected = <span class="ticketsselected">0</span>
+			</br>Total Cost = £<span class="totalcost">0</span></div>
+		</br>
+		</br>
+		<form class="paypal" action='$paypal_checkout_url' method="post" id="paypal_form" target="_self">
+		<input type="hidden" name="business" value="$options[text_field_1]">
 		<input type="hidden" name="cmd" value="_cart">
 		 <input type="hidden" name="upload" value="1">
         <input type="hidden" name="lc" value="UK" />
 		<input type="hidden" name="currency_code" value="GBP" />
-		<input type="hidden" name="custom" value='<?php echo $raffleid;?>' />
+		<input type="hidden" name="custom" value='$raffleid' />
 		<input type="hidden" name="bn" value="PP-BuyNowBF:btn_buynow_LG.gif:NonHostedGuest" />
-		<input type='hidden' name='notify_url' value='<?php echo $options['text_field_3'];?>'>
+		<input type='hidden' name='notify_url' value='$options[text_field_3]'>
 		<!-- <input type="hidden" name="no_shipping" value="1"> -->
-		<input type='hidden' name='cancel_return' value='<?php echo $options['text_field_5'];?>'>
-        <input type='hidden' name='return' value='<?php echo $options['text_field_4'];?>'>
+		<input type='hidden' name='cancel_return' value='$options[text_field_5]'>
+        <input type='hidden' name='return' value='$options[text_field_4]'>
 		<input type="submit" name="submit" value="Submit Payment"/>
-	</form>
-<script type="text/javascript">//<![CDATA[ 
-var $=jQuery.noConflict();
-$(document).ready(function() {  
-	var counter = 0;
-	$(".raffleticket").on("click", function() {
-		$(this).toggleClass("green");
-		$(this).toggleClass('selected');
-		var selectedIds = $('.selected').map(function() {
-			return this.id;
-		}).get();
-		var id = $(this).attr('id');  
-		if(!$(this).hasClass('selected')) {
-			$('#paypal_form #input_' + id).remove();
-			counter--;
-			var ii = 1;
-			$("input[name^='item_name']").each(function(i){
-				$(this).attr('name', 'item_name_' + ii++);
-			});
-			var ii = 1;
-			$("input[name^='amount']").each(function(i){
-				$(this).attr('name','amount_' + ii++);
-			});
-			var ii = 1;
-			$("input[name^='item_number']").each(function(i){
-				$(this).attr('name','item_number_' + ii++);
-			});
-		} else {
-			counter++;
-			$('#paypal_form').append('<input type="hidden" name="item_name_'+counter+'" value="<?php echo $pre_text;?>-' + id + '-<?php echo $post_text?>" id="input_'+id+'">');
-			$('#paypal_form').append('<input type="hidden" name="amount_'+counter+'" value="' + $(".ticketprice").text() +'" id="input_'+id +'">');
-			$('#paypal_form').append('<input type="hidden" name="item_number_'+counter+'" value="' + id +'" id="input_'+id +'">');
-		}	
-		$(".totaltickets").text(selectedIds.length -1);
-		$(".totalprice").text((selectedIds.length - 1)*$(".ticketprice").text()); 
-		//$('[name=amount]').val((selectedIds.length - 1)*$(".ticketprice").text());
-		//$('[name=item_name]').val((selectedIds.length - 1) + " Raffle Ticket(s)");
-		//alert(selectedIds);
-		//alert('<?php echo $pre_text; ?>');
-		
-});});//]]>  
+		</form>
+		</div>
+EOT;
+		$tickettext = array('pre_text'=> $pre_text,'post_text'=> $post_text);
+	
+		wp_localize_script( 'raffle-selector', 'tickettext', $tickettext );
 
+		wp_enqueue_script('raffle-selector');
 
-</script>
-	<?php
-	//}
+		return $output;
+	
 } 
+
+
 
 
 
 /**
  * Trick to update plugin database, see docs
- */
-function cltd_example_update_db_check()
+ 
+
+ function cltd_example_update_db_check()
 {
     global $cltd_example_db_version;
     if (get_site_option('cltd_example_db_version') != $cltd_example_db_version) {
@@ -288,6 +279,7 @@ function cltd_example_update_db_check()
     }
 }
 add_action('plugins_loaded', 'cltd_example_update_db_check');
+*/
 
 /**
  * PART 2. Defining Custom Table List
@@ -324,6 +316,9 @@ class Raffle_Tickets_Sold_List extends WP_List_Table
 			case 'ticketid':
 			case 'raffleid':
 			case 'txnid':
+			case 'ticket':
+			case 'name':
+			case 'address':
 			case 'email':
 			case 'purchase_date':
 				return $item[ $column_name ];
@@ -340,8 +335,8 @@ class Raffle_Tickets_Sold_List extends WP_List_Table
         // also notice how we use $this->_args['singular'] so in this example it will
         // be something like &raffle=2
         $actions = array(
-            'edit' => sprintf('<a href="?page=raffleticketssold_form&id=%s">%s</a>', $item['id'], __('Edit', 'cltd_example')),
-            'delete' => sprintf('<a href="?page=%s&action=delete&id=%s">%s</a>', $_REQUEST['page'], $item['id'], __('Delete', 'cltd_example')),
+            //'edit' => sprintf('<a href="?page=raffleticketssold_form&id=%s">%s</a>', $item['id'], __('Edit', 'cltd_example')),
+            'delete' => sprintf('<a href="?page=%s&action=delete&ticketid=%s">%s</a>', $_REQUEST['page'], $item['ticketid'], __('Delete', 'cltd_example')),
         );
         return sprintf('%s %s',
             $item['ticketid'],
@@ -352,7 +347,7 @@ class Raffle_Tickets_Sold_List extends WP_List_Table
 	function column_cb($item)
     {
         return sprintf(
-            '<input type="checkbox" name="id[]" value="%s" />',
+            '<input type="checkbox" name="ticketid[]" value="%s" />',
             $item['ticketid']
         );
     }
@@ -361,10 +356,13 @@ class Raffle_Tickets_Sold_List extends WP_List_Table
 		$columns = [
 			'cb'      => '<input type="checkbox" />',
 			'ticketid'	  => __( 'Ticket Id', 'sp'),
-           'raffleid' => __('Raffle Id', 'sp'),
+		        'raffleid' => __('Raffle Id', 'sp'),
 			'txnid' => __('Transaction','sp'),
+			'ticket' => __('Ticket','sp'),
+			'name'  => __('Name','sp'),
+			'address'  => __('Address','sp'),
 			'email' => __('email','sp'),
-            'purchase_date' => __('Purchase Date','sp')
+		        'purchase_date' => __('Purchase Date','sp')
 		];
 
 		return $columns;
@@ -374,7 +372,8 @@ class Raffle_Tickets_Sold_List extends WP_List_Table
 		$sortable_columns = array(
 			'ticketid' => array( 'ticketid', true ),
 			'raffleid' => array( 'raffleid', true ),
-			'email' =>  array( 'email',true )
+			'email' =>  array( 'email',true ),
+			'purchase_date' => array('purchase_date', true )
 		);
 
 		return $sortable_columns;
@@ -383,23 +382,18 @@ class Raffle_Tickets_Sold_List extends WP_List_Table
     function get_bulk_actions()
     {
         $actions = array(
-            'delete' => 'Delete'
+            'delete' => 'Delete',
+			'export' => 'Export'
         );
         return $actions;
     }
 	
 	 function process_bulk_action()
     {
+		error_log('GOT HERE');
         global $wpdb;
         $table_name = $wpdb->prefix . 'cj_raffle_tickets'; // do not forget about tables prefix
-		?>
-            <script type="text/javascript">
-				jQuery(document).ready(function() {
-				jQuery('<option>').val('export').text('<?php _e('Export')?>').appendTo("select[name='action']");
-				jQuery('<option>').val('export').text('<?php _e('Export')?>').appendTo("select[name='action2']");
-            });
-            </script>
-        <?php
+	
         if ('delete' === $this->current_action()) {
             $ids = isset($_REQUEST['ticketid']) ? $_REQUEST['ticketid'] : array();
             if (is_array($ids)) $ids = implode(',', $ids);
@@ -409,72 +403,64 @@ class Raffle_Tickets_Sold_List extends WP_List_Table
         }
 		if ('export' === $this->current_action()) {
 				//csv_export();
-				ob_start();
+				//ob_start();
 
-				$output = '';                                           //Assigning the variable to store all future CSV file's data
-				$result = $wpdb->get_results("SHOW COLUMNS FROM " . $table_name . "");   //Displays all COLUMN NAMES under 'Field' column in records	 returned
+			$csv_headers = array();
+			//$csv_headers[] = 'Date';
+			//$csv_headers[] = 'Name';
+			//$csv_headers[] = 'Email';
+	
+				
+				
+			
+			//Assigning the variable to store all future CSV file's data
+			$result = $wpdb->get_results("SHOW COLUMNS FROM " . $table_name . "");   //Displays all COLUMN NAMES under 'Field' column in records	 returned
 
-				if (count($result) > 0) {
-					foreach($result as $row) {
-						$output = $output . $row->Field . ",";
-					}
-					$output = substr($output, 0, -1);               //Removing the last separator, because thats how CSVs work
+			if (count($result) > 0) {
+				foreach($result as $row) {
+					$csv_headers[] =  $row->Field;
 				}
-				$output .= "\n";
-				$values = $wpdb->get_results("SELECT * FROM " . $table_name . "");       //This here
+				$output2 = substr($output2, 0, -1);               //Removing the last separator, because thats how CSVs work
+			}
+			
+			//ob_start();
+			//echo "test";
+			//flush();
+			$output2 = fopen('php://output', 'w');	
+			ob_end_clean();
+			fputcsv($output2, $csv_headers);
 
-				foreach ($values as $rowr) {
-					$fields = array_values((array) $rowr);                  //Getting rid of the keys and using numeric array to get values
-					$output .= implode(",", $fields);      //Generating string with field separator
-					$output .= "\n";    //Yeah...
-				}
-				// Download the file
+			
+			$ids = isset($_REQUEST['ticketid']) ? $_REQUEST['ticketid'] : array();
+		    if (is_array($ids)) $ids = implode(',', $ids);
+		    if (!empty($ids)) {
+				$values = $wpdb->get_results("SELECT * FROM $table_name where ticketid IN ($ids)");       //This here
+			}
 
-				
-				
-		$upload_dir = wp_upload_dir();
-		$filedir = $upload_dir['path'];
-		$filename = 'wp2ghost_export_' . time() . '.csv';
-		if ( ! is_writable( $filedir ) ) {
-			wp_die( "<p>Uploads directory is not writable, can't save the Ghost json file :/</p><p>Generated by the Ghost plugin version {$this->version}.</p>", 'Directory not writable' );
-		}
-		$handle = fopen( $filedir . '/' . $filename, 'w' );
-		
-		fwrite( $handle, $output );
-		fclose( $handle );
-		header( 'Content-Description: File Transfer' );
-		header( 'Content-Type: application/octet-stream' );
-		header( 'Content-Disposition: attachment; filename='.$filename );
-		header( 'Content-Transfer-Encoding: binary' );
-		header( 'Expires: 0' );
-		header( 'Cache-Control: must-revalidate' );
-		header( 'Pragma: public' );
-		header( 'Content-Length: ' . filesize( $filedir . '/' . $filename ) );
-		flush();
-		readfile( $filedir . '/' . $filename );
-		exit;
-				
-				
-				
-/*				$file = "cj_raffle_tickets";
-				$filename = $file."_".date("Y-m-d_H-i",time());
-			  //  header("Content-type: application/vnd.ms-excel");
-			  //  header("Content-disposition: csv" . date("Y-m-d") . ".csv");
-			  
+			foreach ($values as $rowr) {
+				//Getting rid of the keys and using numeric array to get values
+				fputcsv($output2, array_values((array) $rowr));
 
-				header("Pragma: public");
-				header("Expires: 0");
-				header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
-				header("Cache-Control: private", false);                    //Forces the browser to download
-				header("Content-Type: application/octet-stream");
-				header("Content-Disposition: attachment; filename=\"" . $filename  . ".csv\";" );
-				header("Content-Transfer-Encoding: binary");
-				echo $output;
+			}
+			// Download the file	
+			error_log("Got this far:)");
 				
-				//ob_end_flush();
+			//error_log($output);	
 				
-				exit;
-*/
+			$file = "cj_raffle_tickets";
+			$filename = $file."_".date("Y-m-d");
+			header("Content-Type: text/csv");
+			header("Content-Disposition: attachment; filename=\"report.csv\";" );
+			header("Pragma: public");
+			header("Expires: 0");
+			
+			fclose($output2);
+
+			//ob_end_flush();
+			//ob_end_flush();
+			
+			exit;
+
         }
 		
     }
@@ -484,7 +470,7 @@ class Raffle_Tickets_Sold_List extends WP_List_Table
     {
         global $wpdb;
         $table_name = $wpdb->prefix . 'cj_raffle_tickets'; // do not forget about tables prefix
-        $per_page = 5; // constant, how much records will be shown per page
+        $per_page = 20; // constant, how much records will be shown per page
         $columns = $this->get_columns();
         $hidden = array();
         $sortable = $this->get_sortable_columns();
@@ -551,8 +537,7 @@ class Custom_Table_Example_List_Table extends WP_List_Table
 			case 'raffle_img':
 			case 'run_date':
 			case 'winning_no':
-			case 'completed':
-			
+			case 'completed':			
 				return $item[ $column_name ];
 			case 'tickets_sold':
 				return get_sold_tickets ($item);
@@ -780,33 +765,33 @@ function csv_export() {
  */
 function cltd_example_admin_menu()
 {
-    add_menu_page(__('Raffle Tickets', 'cltd_example'), __('Raffle Tickets', 'cltd_example'), 'activate_plugins', 'raffles', 'cltd_example_raffles_page_handler');
+	if (is_admin()) {
+		add_menu_page(__('Raffle Tickets', 'cltd_example'), __('Raffle Tickets', 'cltd_example'), 'edit_pages', 'raffles', 'cltd_example_raffles_page_handler');
 	
-    add_submenu_page('raffles', __('All Raffles', 'cltd_example'), __('All Raffles', 'cltd_example'), 'activate_plugins', 'raffles', 'cltd_example_raffles_page_handler');
+		add_submenu_page('raffles', __('All Raffles', 'cltd_example'), __('All Raffles', 'cltd_example'), 'edit_pages', 'raffles', 'cltd_example_raffles_page_handler');
 	
     // add new will be described in next part
-    add_submenu_page('raffles', __('Add new Raffle', 'cltd_example'), __('Add new', 'cltd_example'), 'activate_plugins', 'raffles_form', 'cltd_example_raffles_form_page_handler');
+		add_submenu_page('raffles', __('Add/Edit Raffle', 'cltd_example'), __('Add new', 'cltd_example'), 'edit_pages', 'raffles_form', 'cltd_example_raffles_form_page_handler');
 	
-	add_submenu_page(
+		add_submenu_page(
         'raffles',
         'Raffle Settings',
         'Raffle Settings',
         'manage_options',
         'raffle-settings',
         'options_page'
-    );
+		);
 	
-	add_submenu_page('raffles', __('Sold Tickets', 'raffleticketssold'), __('Sold Tickets', 'raffleticketssold'), 'activate_plugins', 'raffle_tickets_sold_page_handler', 'raffle_tickets_sold_page_handler');
-	
+		add_submenu_page('raffles', __('Sold Tickets', 'raffleticketssold'), __('Sold Tickets', 'raffleticketssold'), 'activate_plugins', 'raffle_tickets_sold_page_handler', 'raffle_tickets_sold_page_handler');
+	}
 }
 
 
 add_action('admin_menu', 'cltd_example_admin_menu');
 
 
-
-
 function settings_init(  ) { 
+	
 
 	register_setting( 'pluginPage', 'settings' );
 
@@ -1063,6 +1048,9 @@ function cltd_example_raffles_form_page_handler()
         'post_text' => '',
         'ticket_price' => 1,
 		'total_tickets_req' => 10,
+		'winning_no' => '',
+		'run_date' => '',
+		'completed' => '0'
     );
 	
 	
@@ -1072,6 +1060,7 @@ function cltd_example_raffles_form_page_handler()
         $item = shortcode_atts($default, $_REQUEST);
 		//var_dump($default);
 		//var_dump($_REQUEST);
+		//var_dump($item);
 		//die();
         // validate data, and if all ok save item to database
         // if id is zero insert otherwise update
@@ -1151,8 +1140,20 @@ function cltd_example_raffles_form_page_handler()
  */
 function cltd_example_raffles_form_meta_box_handler($item)
 {
+	//var_dump($item);
     ?>
+<script>
+        jQuery(document).ready(function($){
+             $("#random").click(function(){
+			// var today = moment().format('DD-MM-YYYY');
+             var number = 1 + Math.floor(Math.random()*(<?php echo esc_attr($item['total_tickets_req'])?>-1+1));//Change the 6 to be the number of random numbers you want to generate. So if you want 100 numbers, change to 100
+                 $("#winning_no").val(number); 
+				// $("#run_date")
 
+        });
+
+        });
+</script>
 <table cellspacing="2" cellpadding="5" style="width: 100%;" class="form-table">
     <tbody>
     <tr class="form-field">
@@ -1160,8 +1161,8 @@ function cltd_example_raffles_form_meta_box_handler($item)
             <label for="name"><?php _e('Raffle Description', 'cltd_example')?></label>
         </th>
         <td>
-            <input id="raffle_desc" name="raffle_desc" type="text" style="width: 95%" value="<?php echo esc_attr($item['raffle_desc'])?>"
-                   size="50" class="code" placeholder="<?php _e('Raffle Description', 'cltd_example')?>" required>
+            <textarea id="raffle_desc" name="raffle_desc" rows="5" 
+                   size="50" class="code" placeholder="<?php _e('Raffle Description', 'cltd_example')?>" required><?php echo esc_attr($item['raffle_desc'])?></textarea>
         </td>
     </tr>
 	<tr class="form-field">
@@ -1209,10 +1210,38 @@ function cltd_example_raffles_form_meta_box_handler($item)
                    size="50" class="code" placeholder="<?php _e('Total Tickets Required', 'cltd_example')?>">
         </td>
     </tr>
+	<tr class="form-field">
+        <th valign="top" scope="row">
+            <label for="winning_no"><?php _e('Winning No.', 'cltd_example')?></label>
+        </th>
+        <td>
+            <input id="winning_no" name="winning_no" type="text" style="width: 10%" value="<?php echo esc_attr($item['winning_no'])?>"
+                   size="50" class="code" placeholder="<?php _e('Winning No.', 'cltd_example')?>">   <button class="button" type="button" name="buttonpassvalue" id="random">Get Random Number</button> 
+        </td>
+    </tr>
+	<tr class="form-field">
+		<th valign="top" scope="row">
+            <label for="run_date"><?php _e('Run Date', 'cltd_example')?></label>
+        </th>
+        <td>
+            <input id="run_date" name="run_date" type="text" style="width: 10%" value="<?php echo esc_attr($item['run_date'])?>"
+			size="20" class="code" placeholder="<?php _e('Run Date', 'cltd_example')?>"> (YYYY-MM-DD)
+        </td>
+    </tr>
+	<tr class="form-field">
+		<th valign="top" scope="row">
+            <label for="completed"><?php _e('Completed?', 'cltd_example')?></label>
+        </th>
+        <td>
+            <input id="completed" name="completed" type="checkbox" value=1 <?php checked( $item['completed'], 1 ); ?> size="20" class="code" placeholder="<?php _e('Completed?', 'cltd_example')?>">
+        </td>
+    </tr>
     </tbody>
 </table>
-<?php
+<?php 
 }
+
+
 /**
  * Simple function that validates data and retrieve bool on success
  * and error message(s) on error

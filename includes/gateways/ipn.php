@@ -3,6 +3,8 @@
 //include 'dbConfig.php';
 require_once('../../../../../wp-load.php');
 
+define('WP_CART_LIVE_PAYPAL_URL', 'https://www.paypal.com/cgi-bin/webscr');
+define('WP_CART_SANDBOX_PAYPAL_URL', 'https://ipnpb.paypal.com/cgi-bin/webscr');
 
 // CONFIG: Enable debug mode. This means we'll log requests into 'ipn.log' in the same directory.
 // Especially useful if you encounter network errors or other intermittent problems with IPN (validation).
@@ -48,8 +50,18 @@ define("USE_SANDBOX", 1);
             }
             $req .= "&$key=$value";
         }
+		
+		$options = get_option( 'settings' );
+		
+		$paypal_checkout_url = WP_CART_LIVE_PAYPAL_URL;
+        if ($options['checkbox_field_0']) {
+            $paypal_checkout_url = WP_CART_SANDBOX_PAYPAL_URL;
+        }
+		
+		error_log($paypal_checkout_url);
+		
         // Post the data back to PayPal, using curl. Throw exceptions if errors occur.
-        $ch = curl_init('https://ipnpb.sandbox.paypal.com/cgi-bin/webscr');
+        $ch = curl_init($paypal_checkout_url);
         curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -108,6 +120,9 @@ if (strcmp ($res, "VERIFIED") == 0) {
 		$num_cart_items = $_POST['num_cart_items'];
 		error_log(var_export($_POST), true);
 		$raffleid = $_POST['custom'];
+		$name =  $_POST['first_name'] . ' ' . $_POST['last_name'];
+		$address = $_POST['address_street'] . ',' . $_POST['address_city'] . ',' . $_POST['address_zip'];
+
 		$email = $_POST['payer_email'];
 		$purchase_datetmp = strtotime($_POST['payment_date']);
 		$purchase_date = date('Y-m-d H:i:s', $purchase_datetmp);
@@ -116,12 +131,12 @@ if (strcmp ($res, "VERIFIED") == 0) {
 		$tablename = $wpdb->prefix . "cj_raffle_tickets";
 		
 		for($i=1;$i<=$num_cart_items;$i++){
-			$order_item_number = $_POST['item_name'.$i];
+			$order_item_name = $_POST['item_name'.$i];
 			//$order_item_quantity = $_POST['quantity'.$i];
 			$order_item_gross_amount = $_POST['mc_gross_'.$i];
 			$order_item_ticket_no = $_POST['item_number'.$i];
 			
-			$insertOrderItem = $wpdb->query("INSERT INTO `$tablename` (ticketid,raffleid,txnid,email,purchase_date) VALUES('".$order_item_ticket_no."','".$raffleid."','".$txnid."','".$email."','".$purchase_date."')");
+			$insertOrderItem = $wpdb->query("INSERT INTO `$tablename` (ticketid,raffleid,txnid,ticket,name,address,email,purchase_date) VALUES('".$order_item_ticket_no."','".$raffleid."','" .$txnid."','" .$order_item_name. "','" .$name."','".$address."','".$email."','".$purchase_date."')");
 		}
 	}
 	
